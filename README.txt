@@ -1,1 +1,1 @@
-Basically my attempt at a transcription app.
+Basically my attempt at a live transcription app.
