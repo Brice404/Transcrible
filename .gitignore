@@ -1,2 +1,4 @@
 venv/
+vosks models/
 vosk-model-*/
+setups/

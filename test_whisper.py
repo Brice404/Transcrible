@@ -1,4 +1,3 @@
-import vosk
 import pyaudiowpatch as pyaudio
 import queue
 import json
@@ -6,11 +5,11 @@ import sys
 import threading
 import signal
 import numpy as np
+from faster_whisper import WhisperModel
 from PyQt6.QtWidgets import QApplication, QLabel, QWidget
 from PyQt6.QtCore import Qt, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
 
-MODEL_PATH = "vosk-model-en-us-0.22"
 SAMPLE_RATE = 16000
 DEVICE_SAMPLE_RATE = 44100
 CHUNK = 4096
@@ -60,19 +59,22 @@ def resample(data, from_rate, to_rate):
     return resampled.tobytes()
 
 def transcription_thread(comm):
-    model = vosk.Model(MODEL_PATH)
-    recognizer = vosk.KaldiRecognizer(model, SAMPLE_RATE)
+    model = WhisperModel("base", device="cuda", compute_type="float16")
+    buffer = b""
+    min_buffer = SAMPLE_RATE * 2 * 2
+    overlap = SAMPLE_RATE * 1 * 2  # keep 0.5s of overlap
 
     while True:
         data = q.get()
-        if recognizer.AcceptWaveform(data):
-            result = json.loads(recognizer.Result())
-            if result['text']:
-                comm.text_updated.emit(result['text'])
-        else:
-            partial = json.loads(recognizer.PartialResult())
-            if partial['partial']:
-                comm.text_updated.emit(partial['partial'] + "...")
+        buffer += data
+
+        if len(buffer) >= min_buffer:
+            audio = np.frombuffer(buffer, dtype=np.int16).astype(np.float32) / 32768.0
+            buffer = buffer[-overlap:]  # keep last 0.5s instead of clearing
+            segments, _ = model.transcribe(audio, language="en", vad_filter=True)
+            text = " ".join(seg.text for seg in segments).strip()
+            if text:
+                comm.text_updated.emit(text)
 
 def audio_thread():
     p = pyaudio.PyAudio()

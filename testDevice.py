@@ -1,3 +1,4 @@
+"""Find Sound device"""
 import pyaudiowpatch as pyaudio
 
 p = pyaudio.PyAudio()
